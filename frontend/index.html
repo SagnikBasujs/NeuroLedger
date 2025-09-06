@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NeuroLedger — EEG Emotion</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: url('https://images.unsplash.com/photo-1504384308090-c894fdcc538d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80')
+                  no-repeat center center fixed;
+      background-size: cover;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body class="relative flex flex-col text-gray-100">
+
+  <!-- Overlay -->
+  <div class="absolute inset-0 -z-20 bg-gradient-to-br from-black/70 via-indigo-900/70 to-purple-900/70"></div>
+
+  <!-- Glow effects -->
+  <div class="absolute -z-10 top-1/3 left-1/4 w-[600px] h-[600px] rounded-full bg-indigo-600 opacity-30 blur-3xl"></div>
+  <div class="absolute -z-10 bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full bg-purple-600 opacity-20 blur-3xl"></div>
+
+  <!-- Header -->
+  <header class="w-full py-6 px-8 flex items-center justify-between bg-black/40 backdrop-blur-md shadow-lg">
+    <h1 class="text-2xl font-bold tracking-wide text-indigo-300">🧠 NeuroLedger</h1>
+    <nav class="space-x-6 text-sm text-gray-300 hidden sm:block">
+      <a href="#" class="hover:text-white transition">Home</a>
+      <a href="#" class="hover:text-white transition">Docs</a>
+      <a href="#" class="hover:text-white transition">About</a>
+    </nav>
+  </header>
+
+  <!-- Main content -->
+  <main class="flex-1 flex items-center justify-center px-4 py-10 relative">
+    <div class="w-full max-w-2xl bg-white/10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/20 animate-fadeIn">
+      <h2 class="text-2xl font-semibold mb-2 text-white">EEG Emotion Detector</h2>
+      <p class="text-sm text-gray-300 mb-4">Upload a 62×208 EEG CSV file and get the predicted emotion in real time.</p>
+
+      <div id="status" class="text-sm text-gray-300 mb-4">
+        Backend: <span id="backend-status">checking…</span>
+      </div>
+
+      <input type="file" id="fileInput" accept=".csv" class="block mb-3 w-full text-sm text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" />
+      <button id="uploadBtn" class="px-5 py-2 rounded-lg bg-indigo-600 text-white font-medium shadow hover:bg-indigo-700 transition disabled:opacity-60" disabled>
+        Upload & Predict
+      </button>
+
+      <!-- Spinner -->
+      <div id="spinner" class="mt-4 hidden">
+        <div class="inline-flex items-center text-gray-200">
+          <div class="loader mr-3"></div>
+          <span>Processing…</span>
+        </div>
+      </div>
+
+      <!-- Result Box -->
+      <div id="resultBox" class="mt-6 hidden bg-white/10 backdrop-blur-md p-4 rounded-lg border border-white/20">
+        <h3 class="text-lg font-medium text-white" id="predLabel">Predicted: —</h3>
+        <div id="probList" class="mt-3"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="py-4 text-center text-xs text-gray-400 bg-black/40 backdrop-blur shadow-inner">
+    © 2025 NeuroLedger — Cognitive Analytics Platform
+  </footer>
+
+  <style>
+    .loader {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top: 3px solid #6366f1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .prob-bar { height: 12px; border-radius: 6px; background: rgba(255,255,255,0.15); overflow: hidden; }
+    .prob-bar > .fill { height: 100%; background: linear-gradient(90deg,#6366f1,#8b5cf6); }
+    @keyframes fadeIn { from {opacity: 0; transform: translateY(20px);} to {opacity:1; transform:translateY(0);} }
+    .animate-fadeIn { animation: fadeIn 0.8s ease-out; }
+  </style>
+
+  <script>
+    const API_URL = "http://localhost:5000"; // change if backend different
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const statusEl = document.getElementById("backend-status");
+    const spinner = document.getElementById("spinner");
+    const resultBox = document.getElementById("resultBox");
+    const predLabel = document.getElementById("predLabel");
+    const probList = document.getElementById("probList");
+
+    fileInput.addEventListener("change", () => {
+      uploadBtn.disabled = !fileInput.files.length;
+    });
+
+    async function checkHealth() {
+      try {
+        const r = await fetch(API_URL + "/health");
+        const j = await r.json();
+        statusEl.textContent = j.status === "ok" ? `OK — expected ${j.target_rows}×${j.target_cols}` : "unavailable";
+      } catch (e) {
+        statusEl.textContent = "offline";
+      }
+    }
+    checkHealth();
+
+    uploadBtn.addEventListener("click", async () => {
+      if (!fileInput.files.length) return;
+      const f = fileInput.files[0];
+      spinner.classList.remove("hidden");
+      resultBox.classList.add("hidden");
+      predLabel.textContent = "Predicted: —";
+      probList.innerHTML = "";
+
+      const form = new FormData();
+      form.append("file", f);
+
+      try {
+        const res = await fetch(API_URL + "/predict", { method: "POST", body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(()=>null);
+          throw new Error(err?.error || err?.detail || "Server error");
+        }
+        const data = await res.json();
+        predLabel.textContent = `Predicted: ${data.pred_label_name} (${data.pred_label})`;
+        probList.innerHTML = "";
+        const entries = Object.entries(data.probabilities).sort((a,b)=>b[1]-a[1]);
+        for (const [name, val] of entries) {
+          const row = document.createElement("div");
+          row.className = "mb-2";
+          row.innerHTML = `
+            <div class="flex justify-between text-sm mb-1 text-gray-200"><div>${name}</div><div>${(val*100).toFixed(1)}%</div></div>
+            <div class="prob-bar"><div class="fill" style="width:${(val*100).toFixed(2)}%"></div></div>
+          `;
+          probList.appendChild(row);
+        }
+        resultBox.classList.remove("hidden");
+      } catch (err) {
+        alert("Prediction failed: " + err.message);
+      } finally {
+        spinner.classList.add("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "data_root": "D:\\NeuroLedger\\data\\raw\\eeg_feature_csv_data",
+  "sessions": [
+    "1",
+    "2",
+    "3"
+  ],
+  "target_rows": 63,
+  "target_cols": 210,
+  "feature_dim": 13230,
+  "model_path": "D:\\NeuroLedger\\data\\processed\\rf_emotion_model.joblib",
+  "scaler_path": "D:\\NeuroLedger\\data\\processed\\scaler.joblib",
+  "predictions_csv": "D:\\NeuroLedger\\data\\processed\\predictions_test_set.csv",
+  "label_map": {
+    "0": "neutral",
+    "1": "sadness",
+    "2": "fear",
+    "3": "happiness"
+  }
+}
